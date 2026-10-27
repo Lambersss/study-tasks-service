@@ -2,8 +2,8 @@
 
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Path
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from fastapi import FastAPI, HTTPException, Path, Response
+from pydantic import BaseModel, ConfigDict, StrictBool, StringConstraints
 
 APP_VERSION = "1.0.0"
 
@@ -22,6 +22,17 @@ class Task(BaseModel):
     id: int
     title: str
     completed: bool = False
+
+
+class TaskUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    completed: StrictBool
+
+
+class TaskStats(BaseModel):
+    total: int
+    completed: int
+    pending: int
 
 
 def create_app() -> FastAPI:
@@ -60,12 +71,34 @@ def create_app() -> FastAPI:
         return task
 
     @app.get("/tasks", response_model=list[Task], tags=["tasks"])
-    async def list_tasks():
-        return list(tasks.values())
+    async def list_tasks(completed: bool | None = None):
+        return [
+            task for task in tasks.values()
+            if completed is None or task.completed == completed
+        ]
 
     @app.get("/tasks/{task_id}", response_model=Task, tags=["tasks"])
     async def get_task(task_id: TaskId):
         return find_task(task_id)
+
+    @app.patch("/tasks/{task_id}", response_model=Task, tags=["tasks"])
+    async def update_task(task_id: TaskId, payload: TaskUpdate):
+        task = find_task(task_id)
+        task.completed = payload.completed
+        return task
+
+    @app.delete("/tasks/{task_id}", status_code=204, tags=["tasks"])
+    async def delete_task(task_id: TaskId):
+        find_task(task_id)
+        del tasks[task_id]
+        return Response(status_code=204)
+
+    @app.get("/stats", response_model=TaskStats, tags=["tasks"])
+    async def task_stats():
+        completed = sum(task.completed for task in tasks.values())
+        return TaskStats(
+            total=len(tasks), completed=completed, pending=len(tasks) - completed
+        )
 
     return app
 
