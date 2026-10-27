@@ -1,0 +1,54 @@
+name: Tests and application artifact
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Check dependency compatibility
+        run: python -m pip check
+
+      - name: Run tests
+        run: python -m pytest -v
+
+      # По умолчанию шаг выполняется только после успеха предыдущих шагов.
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: study-tasks-api
+          if-no-files-found: error
+          retention-days: 90
+          include-hidden-files: true
+          # Явный список: .env, окружение, кеши и .git сюда не попадут.
+          path: |
+            app_final.py
+            test_app.py
+            requirements.txt
+            requirements-dev.txt
+            README.md
+            .env.example
+            .gitignore
+            .github/workflows/ci.yml
